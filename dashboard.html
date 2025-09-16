@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | The Hive</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1>Welcome to The Hive, <span id="userName"></span>!</h1>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="app-content">
+            <!-- Pulse Check Feature -->
+            <div class="feature-card">
+                <h3>📊 Pulse Check</h3>
+                <p>Share how you're feeling in one word. The AI will connect you with others who feel the same.</p>
+                <div class="input-group">
+                    <input type="text" id="pulseInput" placeholder="How are you feeling? (e.g., anxious, happy, stressed)">
+                    <button onclick="submitPulse()" class="login-btn">Share Pulse</button>
+                </div>
+                <div id="pulseFeedback"></div>
+            </div>
+
+            <!-- Node Chat Feature -->
+            <div class="feature-card" id="nodeSection" style="display: none;">
+                <h3>💬 Support Node</h3>
+                <p>You've been invited to a support group. Chat with others who understand what you're going through.</p>
+                <div class="chat-container" id="chatMessages"></div>
+                <div class="input-group">
+                    <input type="text" id="chatInput" placeholder="Type your message...">
+                    <button onclick="sendMessage()" class="login-btn">Send Message</button>
+                </div>
+            </div>
+
+            <!-- Bridge Tool -->
+            <div class="feature-card">
+                <h3>🌉 The Bridge</h3>
+                <p>Need more support? Ask a friend to help you access professional resources.</p>
+                <button onclick="showBridgeTool()" class="login-btn">Use The Bridge</button>
+                <div id="bridgeTool" style="display: none; margin-top: 15px;">
+                    <textarea id="bridgeMessage" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">Hey, I'm working on some stuff and could use a friend to help me look into talking to someone. Can you be my Bridge?</textarea>
+                    <button onclick="sendBridgeRequest()" class="login-btn">Send to a Friend</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentNode = null;
+        const currentUser = sessionStorage.getItem('currentUser');
+
+        // Check authentication
+        if (!currentUser) {
+            window.location.href = '/';
+        }
+
+        document.getElementById('userName').textContent = currentUser;
+
+        function logout() {
+            sessionStorage.removeItem('currentUser');
+            window.location.href = '/';
+        }
+
+        // Pulse Check functionality
+        function submitPulse() {
+            const word = document.getElementById('pulseInput').value;
+            if (!word) return;
+
+            fetch('/api/pulse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser, word })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('pulseFeedback').innerHTML = 
+                    `<p style="color: green; margin-top: 10px;">✅ ${data.message}</p>`;
+                
+                if (data.nodeInvite) {
+                    currentNode = data.nodeInvite;
+                    document.getElementById('nodeSection').style.display = 'block';
+                    joinNode();
+                }
+            });
+        }
+
+        // Node Chat functionality
+        function joinNode() {
+            socket.emit('join-node', { room: `node_${currentNode.id}` });
+            addChatMessage('AI Moderator', 'Welcome to the support group! How is everyone feeling today?', true);
+        }
+
+        function sendMessage() {
+            const message = document.getElementById('chatInput').value;
+            if (!message) return;
+
+            socket.emit('send-chat-message', {
+                username: currentUser,
+                message: message,
+                room: `node_${currentNode.id}`
+            });
+
+            addChatMessage(currentUser, message, false);
+            document.getElementById('chatInput').value = '';
+        }
+
+        function addChatMessage(username, message, isAI) {
+            const chatContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${isAI ? 'ai' : ''}`;
+            messageDiv.innerHTML = `<strong>${username}:</strong> ${message}`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Listen for incoming messages
+        socket.on('chat-message', (data) => {
+            addChatMessage(data.username, data.message, data.username === 'AI Moderator');
+        });
+
+        // Bridge Tool functionality
+        function showBridgeTool() {
+            document.getElementById('bridgeTool').style.display = 'block';
+        }
+
+        function sendBridgeRequest() {
+            const message = document.getElementById('bridgeMessage').value;
+            alert(`Simulation: This message would be sent to your chosen friend:\n\n"${message}"`);
+            document.getElementById('bridgeTool').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
